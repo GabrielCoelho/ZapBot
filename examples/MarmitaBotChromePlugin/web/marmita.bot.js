@@ -4,97 +4,156 @@
 
 // Instancia do Bot
 const zap = new ZapBot();
-const randomInt = (min, max) => Math.floor(Math.random() * (max-min+1) + min);
-const firstName = (name) => name.split(' ').shift();
+
+// Implementacao de mapa usando localStorage
+const marmitaDB = new class Database
+{
+    constructor()
+    {
+        this.localDate = new Date().toLocaleString().split(' ').shift();
+
+        if (localStorage.getItem('lastMarmita') !== this.localDate)
+        {
+            this.clear();
+        }
+
+        this.data = JSON.parse(localStorage.getItem('marmitaData')) || {};
+    }
+
+    clear()
+    {
+        this.data = {};
+
+        localStorage.setItem('lastMarmita', this.localDate);
+        this.save();
+    }
+
+    get(key)
+    {
+        return this.data[key];
+    }
+
+    set(key, value)
+    {
+        this.data[key] = value;
+
+        this.save();
+    }
+
+    keys()
+    {
+        return Object.keys(this.data);
+    }
+
+    has(key)
+    {
+        return this.data[key] !== undefined;
+    }
+
+    save()
+    {
+        localStorage.setItem('marmitaData', JSON.stringify(this.data));
+    }
+}
 
 /**
- * Bot em homenagem ao nosso mano Kejero
+ * Automatizacao dos pedidos de marmitex
  */
-const eaeMessages = [
-    'Vai toma no seu cu seu mukirana viado',
-    'Rato inescrupuloso do caralho',
-    'Isso ai é extremamente facil, faço em 1 minuto',
-    'Quem ta tiltado é vc, eu to suave',
-    'Pra que gastar se podemos nao gastar?',
-    'Free é mais gostoso, nao é?',
-    'kek?',
-    'COKcolla 8====D'
-];
+const firstName = (name) => name.split(' ').shift();
+function parseMessage(message)
+{
+    const messageSplited = message.replace('@marmita', '').trim().split(',');
 
-const names = {
-    'Adolpho': 'Felpuda',
-    'Felipe': 'Carequinha',
-    'Leandro': 'Frangolho',
-    'Gabriel': 'Bugado',
-    'Thiago': 'Kejero(FAKE)',
-    'Emerson': 'Kingão',
-    'Paulo': 'Cagão',
-    'Rafael': 'Peretta_Ladrao',
-    'Andre': 'Moreno'
-};
+    return {
+        vendor: messageSplited[0].toLowerCase(),
+        description: messageSplited[1]
+    }
+}
+function summary()
+{
+    let summary = '';
+
+    Array.from(marmitaDB.keys()).forEach(key =>
+    {
+        const vendor = marmitaDB.get(key);
+
+        summary += `*${key.toUpperCase()}* - Pq Tec - ${new Date().toLocaleString().split(' ').shift()}`;
+        summary += "\n\n";
+        vendor.forEach(order => summary += `${order.owner} - ${order.description} \n`);
+        summary += "\n\n";
+    });
+
+    return summary === ''
+        ? 'Nenhuma marmot ate agora...'
+        : summary;
+}
 
 zap.sendMessage(
-`▒▒▒▒▒▒▒▓
-▒▒▒▒▒▒▒▓▓▓
-▒▓▓▓▓▓▓░░░▓
-▒▓░░░░▓░░░░▓
-▓░░░░░░▓░▓░▓
-▓░░░░░░▓░░░▓
-▓░░▓░░░▓▓▓▓
-▒▓░░░░▓▒▒▒▒▓
-▒▒▓▓▓▓▒▒▒▒▒▓
-▒▒▒▒▒▒▒▒▓▓▓▓
-▒▒▒▒▒▓▓▓▒▒▒▒▓
-▒▒▒▒▓▒▒▒▒▒▒▒▒▓
-▒▒▒▓▒▒▒▒▒▒▒▒▒▓
-▒▒▓▒▒▒▒▒▒▒▒▒▒▒▓
-▒▓▒▓▒▒▒▒▒▒▒▒▒▓
-▒▓▒▓▓▓▓▓▓▓▓▓▓
-▒▓▒▒▒▒▒▒▒▓
-▒▒▓▒▒▒▒▒▓
-kk eae men. Eu sou o *Kejero B0T*!!!!
-Pra falar cmg é só usar: *@kejero* no começo da frase.`
+`O *_Marmitão BOT_* está ligado! Faça seu pedido no seguinte formato:
+*@marmita <Vendor>, <Description>*
+Ex: *@marmita Lorenzo, Light + Arroz integral + Frango*
+Use *@marmita resumo* para pegar o relatório`
 );
 
 zap.event.on('onReceive', (meta) =>
 {
-    const compare = (regex) => regex.test(meta.message.toLowerCase());
-
-    if (!compare(/@kejero/)) return;
+    if (!/@marmita/.test(meta.message.toLowerCase())) return;
 
     meta.sender = meta.me
-                ? names['Gabriel']
-                : names[firstName(meta.sender)] || meta.sender;
+                ? 'Gabriel'
+                : meta.sender;
 
-    if (compare(/boa/))
+    if (firstName(meta.sender) === '+55')
     {
-        zap.sendMessage(`${meta.sender}, a boa hoje é comer variuz keju kjkjk`);
+        return zap.sendMessage(`Ei ${meta.sender}, não tenho seu numero cadastrado e infelizmente não posso te ajudar. :(`);
     }
-    else if (compare(/cu/))
+
+    if (/resumo/.test(meta.message))
     {
-        zap.sendMessage(`Ow ${meta.sender} seu fdp, vai toma no cu vc`);
+        return zap.sendMessage(summary());
     }
-    else if (compare(/cock/))
+
+    if (/cagado/gi.test(meta.message))
     {
-        zap.sendMessage(`@${meta.sender} COCK-COLLA 8========D`);
+        return;
     }
-    else if (compare(/drone/))
+
+    if (!meta.message.match(/@marmita\s+([^,]+),(.*?)$/))
     {
-        zap.sendMessage(`@${meta.sender}, ` + [
-            'Ta nadando na praia',
-            'foda-se',
-            'vai tomar no cu',
-            'ta nadando no puteiro da sua mae'
-        ][randomInt(0, 3)]);
-    }
-    else
-    {
-        zap.sendMessage(
-            `Eae ${meta.sender}! ${eaeMessages[randomInt(0, eaeMessages.length -1)]}`
+        return zap.sendMessage(
+            `Ei ${firstName(meta.sender)}, seu pedido ta todo cagado mano.
+            Ex: *@marmita Lorenzo, Light + Arroz integral + Frango*`
         );
     }
 
-    console.log('@kejero: ', meta);
+    const message = parseMessage(meta.message);
+
+    if (!marmitaDB.has(message.vendor))
+    {
+        marmitaDB.set(message.vendor, []);
+    }
+
+    const vendorSector = marmitaDB.get(message.vendor);
+
+    const existingOrder = vendorSector
+        .find(order => order.owner === firstName(meta.sender));
+
+    if (existingOrder)
+    {
+        vendorSector.splice(vendorSector.indexOf(existingOrder), 1);
+    }
+
+    vendorSector.push({
+        owner: firstName(meta.sender),
+        description: message.description
+    });
+
+    marmitaDB.save();
+
+    zap.sendMessage(`Marmot do ${firstName(meta.sender)} lanchada!!`);
+    zap.sendMessage(summary());
+
+    console.log('@marmita: ', meta);
 });
 
 zap.startListen();

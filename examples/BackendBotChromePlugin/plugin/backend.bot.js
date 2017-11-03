@@ -4,105 +4,68 @@
 
 // Instancia do Bot
 const zap = new ZapBot();
-// BD
-const db = new Map();
 
-/**
- * Automatizacao dos pedidos de marmitex
- */
-const firstName = (name) => name.split(' ').shift();
-function parseMessage(message)
+// Porta de comunicacao com o plugin do Chrome
+const chromeSocket = chrome.runtime.connect({name: "zapzop-channel"});;
+
+// Lista de tarefas para serem executadas quando as requests terminarem
+// @property id Id da tarefa
+// @property execute Funcao para ser executada
+const tasks = [];
+
+// Escuta por mensagens
+// @property idTask Id da tarefa
+// @property data Dados recebidos
+chromeSocket.onMessage.addListener((msg) =>
 {
-    const messageSplited = message.replace('@marmita', '').trim().split(',');
+    console.log('Recebi do plugin: ', msg);
 
-    return {
-        vendor: messageSplited[0],
-        description: messageSplited[1]
+    const executable = tasks.find(task => task.id === msg.idTask);
+
+    if (!executable) throw new ReferenceError('Task not found!');
+
+    executable.execute(msg.data);
+});
+
+function zapSendMessage(msg)
+{
+    console.log('Recebi isso do server: ', msg);
+
+    if (msg.operations)
+    {
+        msg.operations
+            .filter(operation => operation.type === 'SEND_MSG')
+            .forEach(
+                operation => {
+                    console.log('-> SEND ZAP: ', operation.text);
+                    zap.sendMessage(operation.text);
+                }
+            );
     }
 }
-function summary()
-{
-    let summary = '';
-
-    Array.from(db.keys()).forEach(key =>
-    {
-        const vendor = db.get(key);
-
-        summary += `*${key}*`;
-        summary += "\n\n";
-        vendor.forEach(order => summary += `${order.owner} - ${order.description} \n`);
-        summary += "\n\n";
-    });
-
-    return summary === ''
-        ? 'Nenhuma marmot ate agora...'
-        : summary;
-}
-
-zap.sendMessage(
-`O *_Marmitão BOT_* está ligado! Faça seu pedido no seguinte formato:
-*@marmita <Vendor>, <Description>*
-Ex: *@marmita Lorenzo, Light + Arroz integral + Frango*
-Use *@marmita resumo* para pegar o relatório`
-);
 
 zap.event.on('onReceive', (meta) =>
 {
-    if (!/@marmita/.test(meta.message.toLowerCase())) return;
+    if (!/@bot/.test(meta.message)) return;
 
-    meta.sender = meta.me
-                ? 'Gabriel'
-                : meta.sender;
+    console.log('Evento recebido: ', meta);
 
-    if (firstName(meta.sender) === '+55')
-    {
-        return zap.sendMessage('Não tenho seu numero cadastrado! :(');
-    }
+    const newTask = {
+        id: tasks.length,
+        execute: (data) => zapSendMessage(data)
+    };
 
-    if (/resumo/.test(meta.message))
-    {
-        return zap.sendMessage(summary());
-    }
-
-    if (/cagado/gi.test(meta.message))
-    {
-        return;
-    }
-
-    if (!meta.message.match(/@marmita\s+([^,]+),(.*?)$/))
-    {
-        return zap.sendMessage(
-            `Ei ${firstName(meta.sender)}, seu pedido ta todo cagado mano.
-            Ex: *@marmita Lorenzo, Light + Arroz integral + Frango*`
-        );
-    }
-
-    const message = parseMessage(meta.message);
-
-    if (!db.has(message.vendor))
-    {
-        db.set(message.vendor, []);
-    }
-
-    const vendorSector = db.get(message.vendor);
-
-    const existingOrder = vendorSector
-        .find(order => order.owner === firstName(meta.sender));
-
-    if (existingOrder)
-    {
-        vendorSector.splice(vendorSector.indexOf(existingOrder), 1);
-    }
-
-    vendorSector.push({
-        owner: firstName(meta.sender),
-        description: message.description
-    })
-
-    zap.sendMessage(`Marmot do ${firstName(meta.sender)} lanchada!!`);
-    zap.sendMessage(summary());
-
-    console.log('@marmita: ', meta);
+    tasks.push(newTask);
+    chromeSocket.postMessage({
+        idTask: newTask.id,
+        data: meta
+    });
 });
 
+// Comeca escutar novas mensagens
 zap.startListen();
+
+zap.sendMessage(`
+*BackendBot na area!!*
+Use *@bot* pra falar comigo...
+`);
